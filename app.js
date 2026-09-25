@@ -12,6 +12,13 @@
   const MAX_SEARCH_ZOOM = 24;
   const MAX_SEARCH_RESULTS = 50;
 
+  // Only these count towards the tally. Everything else on the map — Greenland,
+  // Taiwan, Kosovo and the rest — can still be scratched, it just does not count.
+  const SOVEREIGN = new Set(
+    typeof SOVEREIGN_COUNTRIES === 'undefined' ? [] : SOVEREIGN_COUNTRIES
+  );
+  const SOVEREIGN_TOTAL = SOVEREIGN.size;
+
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
@@ -68,6 +75,7 @@
   const panelGroup = $('panel-group');
   const visitButtons = $('visit-buttons');
   const yearInput = $('year-input');
+  const tally = $('tally');
   const groupVisitors = $('group-visitors');
   const groupVisits = $('group-visits');
   const groupAge = $('group-age');
@@ -101,6 +109,16 @@
     state.names = state.features
       .map((f) => f.properties.name)
       .sort((a, b) => a.localeCompare(b));
+
+    const unmatched = SOVEREIGN_TOTAL
+      ? SOVEREIGN_COUNTRIES.filter((name) => !state.byName.has(name))
+      : [];
+    if (unmatched.length) {
+      console.warn(
+        'Sovereign countries with no feature in countries-50m, so they cannot be ' +
+        'scratched or counted: ' + unmatched.join(', ')
+      );
+    }
   }
 
   function buildMap() {
@@ -367,6 +385,7 @@
 
     renderPanel();
     paintCountry(name);
+    updateTally();
     if (previousCount === 0 && next > 0) {
       scratchReveal(name);
       if (!yearInput.value) {
@@ -476,6 +495,32 @@
       (state.travellers === 1 ? ' traveller' : ' travellers');
   }
 
+  /* ----------------------------------------------------------------- tally */
+
+  function percentOfWorld(count) {
+    return SOVEREIGN_TOTAL ? Math.round((count / SOVEREIGN_TOTAL) * 100) : 0;
+  }
+
+  function updateTally() {
+    if (state.mode === 'mine') {
+      let visited = 0;
+      state.visits.forEach((value, name) => {
+        if (SOVEREIGN.has(name)) visited += 1;
+      });
+      tally.textContent = visited + ' of ' + SOVEREIGN_TOTAL + ' countries · ' +
+        percentOfWorld(visited) + '%';
+      return;
+    }
+
+    let visits = 0;
+    state.stats.forEach((stat, name) => {
+      if (SOVEREIGN.has(name)) visits += stat.visitors;
+    });
+    const average = state.travellers ? visits / state.travellers : 0;
+    tally.textContent = 'Average traveller: ' + Math.round(average) + ' of ' +
+      SOVEREIGN_TOTAL + ' countries · ' + percentOfWorld(average) + '%';
+  }
+
   /* ----------------------------------------------------------------- modes */
 
   async function setMode(mode) {
@@ -487,6 +532,7 @@
 
     if (mode === 'group') await loadGroup();
     paint();
+    updateTally();
     if (state.selected) renderPanel();
   }
 
@@ -675,6 +721,7 @@
     show('app');
     sizeMap();
     paint();
+    updateTally();
   }
 
   async function handleSession(session) {
