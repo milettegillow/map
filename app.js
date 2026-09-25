@@ -37,6 +37,17 @@
     return STORED_NAMES[trimmed.toLowerCase()] || trimmed;
   }
 
+  // countries-50m files the French overseas departments inside the France
+  // MultiPolygon, so they cannot be scratched on their own. Each box below is
+  // matched against a polygon's centroid to pull it out as its own place.
+  const OVERSEAS = [
+    { name: 'French Guiana', west: -55,  east: -51,   south: 2,     north: 6 },
+    { name: 'Réunion',       west: 55,   east: 56,    south: -21.5, north: -20.8 },
+    { name: 'Mayotte',       west: 44.9, east: 45.4,  south: -13.1, north: -12.5 },
+    { name: 'Guadeloupe',    west: -61.9, east: -61,  south: 15.8,  north: 16.6 },
+    { name: 'Martinique',    west: -61.3, east: -60.8, south: 14.3, north: 14.9 }
+  ];
+
   // Only these count towards the tally. Everything else on the map — Greenland,
   // Taiwan, Kosovo and the rest — can still be scratched, it just does not count.
   const SOVEREIGN = new Set(
@@ -126,10 +137,68 @@
   let zoom = null;
   let clipSeq = 0;
 
+  function zoneFor(coordinates) {
+    const centre = d3.geoCentroid({ type: 'Polygon', coordinates: coordinates });
+    const lon = centre[0];
+    const lat = centre[1];
+    return OVERSEAS.find((zone) =>
+      lon >= zone.west && lon <= zone.east && lat >= zone.south && lat <= zone.north
+    );
+  }
+
+  function polygonsOf(geometry) {
+    if (!geometry) return [];
+    return geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
+  }
+
+  // Whatever matches no box stays France — the mainland, Corsica and the
+  // Atlantic islands. A department that already has its own feature in the data
+  // is merged into it rather than added a second time.
+  function splitOverseas(features) {
+    const france = features.find((f) => f.properties.name === 'France');
+    if (!france || france.geometry.type !== 'MultiPolygon') return features;
+
+    const kept = [];
+    const pulled = new Map();
+
+    france.geometry.coordinates.forEach((coordinates) => {
+      const zone = zoneFor(coordinates);
+      if (!zone) {
+        kept.push(coordinates);
+        return;
+      }
+      if (!pulled.has(zone.name)) pulled.set(zone.name, []);
+      pulled.get(zone.name).push(coordinates);
+    });
+
+    if (!pulled.size || !kept.length) return features;
+
+    france.geometry = { type: 'MultiPolygon', coordinates: kept };
+
+    const result = features.slice();
+    pulled.forEach((coordinates, name) => {
+      const existing = result.find((f) => f.properties.name === name);
+      if (existing) {
+        existing.geometry = {
+          type: 'MultiPolygon',
+          coordinates: polygonsOf(existing.geometry).concat(coordinates)
+        };
+        return;
+      }
+      result.push({
+        type: 'Feature',
+        properties: { name: name },
+        geometry: { type: 'MultiPolygon', coordinates: coordinates }
+      });
+    });
+    return result;
+  }
+
   async function loadWorld() {
     const topo = await d3.json(WORLD_URL);
     const collection = topojson.feature(topo, topo.objects.countries);
-    state.features = collection.features.filter((f) => f.properties && f.properties.name);
+    const named = collection.features.filter((f) => f.properties && f.properties.name);
+    state.features = splitOverseas(named);
     state.byName = new Map(state.features.map((f) => [f.properties.name, f]));
     state.names = state.features
       .map((f) => f.properties.name)
