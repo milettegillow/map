@@ -265,7 +265,8 @@ input.wants-year {
 
 .country:hover {
   stroke: var(--ink);
-  stroke-width: 1.3;
+  stroke-width: 1.4;
+  filter: brightness(1.14);
 }
 
 .country.is-selected {
@@ -350,7 +351,7 @@ input.wants-year {
   gap: 0.9rem;
 }
 
-.legend span {
+.legend > span {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;

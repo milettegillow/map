@@ -3,7 +3,10 @@
 
   /* ------------------------------------------------------------ constants */
 
-  const DEPTH = { 1: '#e6c3b5', 2: '#c98574', 3: '#a1473a', 4: '#6b1d18' };
+  // Oxblood for my own map, olive for the group map, so the two never read as
+  // the same data. Both are keyed 1-4, deepest last.
+  const MINE_DEPTH = { 1: '#d49a87', 2: '#b8675a', 3: '#8f3a2f', 4: '#6b1d18' };
+  const GROUP_DEPTH = { 1: '#c2c48f', 2: '#959d5c', 3: '#66733a', 4: '#3c4a22' };
   const PARCHMENT = '#f2e8d0';
   const GOLD = '#c9a24a';
   const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json';
@@ -87,6 +90,7 @@
 
   const frame = $('frame');
   const legend = $('legend');
+  const legendItems = Array.prototype.slice.call(legend.children);
   const travellersEl = $('travellers');
   const modeMine = $('mode-mine');
   const modeGroup = $('mode-group');
@@ -183,13 +187,13 @@
   function fillFor(name) {
     if (state.mode === 'mine') {
       const v = state.visits.get(name);
-      return v ? DEPTH[v.visit_count] : PARCHMENT;
+      return v ? MINE_DEPTH[v.visit_count] : PARCHMENT;
     }
     const s = state.stats.get(name);
     if (!s || !s.visitors) return PARCHMENT;
     const max = state.maxVisitors || 1;
     const bucket = Math.min(4, Math.max(1, Math.ceil((s.visitors / max) * 4)));
-    return DEPTH[bucket];
+    return GROUP_DEPTH[bucket];
   }
 
   function paint() {
@@ -517,6 +521,43 @@
       (state.travellers === 1 ? ' traveller' : ' travellers');
   }
 
+  /* ---------------------------------------------------------------- legend */
+
+  // My map counts visits, so the swatches are labelled 1 to 4+. The group map
+  // buckets countries against the busiest one, so a bucket stands for a range
+  // of visitor counts; a range nobody falls into is left out.
+  function updateLegend() {
+    const mine = state.mode === 'mine';
+    const scale = mine ? MINE_DEPTH : GROUP_DEPTH;
+    const max = state.maxVisitors;
+    let shown = 0;
+
+    legendItems.forEach((item, index) => {
+      const bucket = index + 1;
+      item.querySelector('i').style.background = scale[bucket];
+      const label = item.querySelector('span');
+
+      if (mine) {
+        label.textContent = bucket === 4 ? '4+' : String(bucket);
+        item.hidden = false;
+        shown += 1;
+        return;
+      }
+
+      const lowest = Math.floor(((bucket - 1) * max) / 4) + 1;
+      const highest = Math.floor((bucket * max) / 4);
+      if (lowest > highest) {
+        item.hidden = true;
+        return;
+      }
+      label.textContent = lowest === highest ? String(lowest) : lowest + '\u2013' + highest;
+      item.hidden = false;
+      shown += 1;
+    });
+
+    legend.hidden = shown === 0;
+  }
+
   /* ----------------------------------------------------------------- tally */
 
   function percentOfWorld(count) {
@@ -549,11 +590,11 @@
     state.mode = mode;
     modeMine.classList.toggle('is-active', mode === 'mine');
     modeGroup.classList.toggle('is-active', mode === 'group');
-    legend.hidden = mode !== 'mine';
     travellersEl.hidden = mode !== 'group';
 
     if (mode === 'group') await loadGroup();
     paint();
+    updateLegend();
     updateTally();
     if (state.selected) renderPanel();
   }
@@ -760,6 +801,7 @@
     show('app');
     sizeMap();
     paint();
+    updateLegend();
     updateTally();
   }
 
@@ -795,6 +837,7 @@
   (async function boot() {
     await loadWorld();
     buildMap();
+    updateLegend();
 
     const { data } = await client.auth.getSession();
     await handleSession(data ? data.session : null);
