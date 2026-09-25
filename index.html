@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Scratch Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ------------------------------------------------------------ loading -->
+<section id="screen-loading" class="screen screen-centred">
+  <h1 class="title">The Scratch Map</h1>
+</section>
+
+<!-- --------------------------------------------------------------- auth -->
+<section id="screen-auth" class="screen screen-centred" hidden>
+  <div class="card">
+    <h1 class="title">The Scratch Map</h1>
+
+    <form id="auth-form" class="stack">
+      <label class="field">
+        <span>Email</span>
+        <input type="email" id="auth-email" autocomplete="email" required>
+      </label>
+      <button type="submit" class="plate" id="auth-send">Send me a link</button>
+    </form>
+
+    <div id="auth-sent" class="stack" hidden>
+      <p id="auth-sent-line"></p>
+      <button type="button" class="plate" id="auth-again">Use another email</button>
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------ profile -->
+<section id="screen-profile" class="screen screen-centred" hidden>
+  <div class="card">
+    <h1 class="title">The Scratch Map</h1>
+    <h2>A few details</h2>
+
+    <form id="profile-form" class="stack">
+      <label class="field">
+        <span>Year you were born</span>
+        <input type="number" id="birth-year" inputmode="numeric" required>
+      </label>
+
+      <div class="field typeahead">
+        <label for="birth-country">Country you were born in</label>
+        <input type="text" id="birth-country" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
+        <ul class="typeahead-list" id="birth-country-list" hidden></ul>
+      </div>
+
+      <button type="submit" class="plate" id="profile-save">Save</button>
+    </form>
+  </div>
+</section>
+
+<!-- ---------------------------------------------------------------- app -->
+<section id="screen-app" class="screen screen-app" hidden>
+
+  <header class="topbar">
+    <h1 class="title">The Scratch Map</h1>
+
+    <div class="toolbar">
+      <div class="modes">
+        <button type="button" class="plate is-active" id="mode-mine">My map</button>
+        <button type="button" class="plate" id="mode-group">Group map</button>
+      </div>
+      <span class="travellers" id="travellers" hidden></span>
+      <button type="button" class="plate" id="csv-btn">Download my CSV</button>
+      <button type="button" class="plate plate-quiet" id="signout">Sign out</button>
+    </div>
+  </header>
+
+  <main class="mapwrap">
+    <div class="frame" id="frame">
+      <svg id="map" role="img" aria-label="World map"></svg>
+
+      <div class="field typeahead search">
+        <input type="text" id="country-search" placeholder="Find a country" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="Find a country">
+        <ul class="typeahead-list" id="country-search-list" hidden></ul>
+      </div>
+
+      <div class="zoomers">
+        <button type="button" class="plate plate-square" id="zoom-in" aria-label="Zoom in">+</button>
+        <button type="button" class="plate plate-square" id="zoom-out" aria-label="Zoom out">&minus;</button>
+        <button type="button" class="plate" id="zoom-reset">Reset</button>
+      </div>
+
+      <div class="legend" id="legend">
+        <span><i style="background:#e6c3b5"></i>1</span>
+        <span><i style="background:#c98574"></i>2</span>
+        <span><i style="background:#a1473a"></i>3</span>
+        <span><i style="background:#6b1d18"></i>4+</span>
+      </div>
+    </div>
+
+    <aside class="panel" id="panel" hidden>
+      <button type="button" class="plate plate-quiet panel-close" id="panel-close">Close</button>
+      <h2 id="panel-title"></h2>
+
+      <div id="panel-mine">
+        <div class="visit-buttons" id="visit-buttons">
+          <button type="button" class="plate" data-visits="0">0</button>
+          <button type="button" class="plate" data-visits="1">1</button>
+          <button type="button" class="plate" data-visits="2">2</button>
+          <button type="button" class="plate" data-visits="3">3</button>
+          <button type="button" class="plate" data-visits="4">4+</button>
+        </div>
+
+        <label class="field">
+          <span>Year you first went</span>
+          <input type="number" id="year-input" inputmode="numeric">
+        </label>
+      </div>
+
+      <div id="panel-group" class="stack" hidden>
+        <p id="group-visitors"></p>
+        <p id="group-visits"></p>
+        <p id="group-age"></p>
+      </div>
+    </aside>
+  </main>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" defer></script>
+<script src="config.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>

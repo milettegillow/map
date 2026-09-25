@@ -1,0 +1,666 @@
+(function () {
+  'use strict';
+
+  /* ------------------------------------------------------------ constants */
+
+  const DEPTH = { 1: '#e6c3b5', 2: '#c98574', 3: '#a1473a', 4: '#6b1d18' };
+  const PARCHMENT = '#f2e8d0';
+  const GOLD = '#c9a24a';
+  const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json';
+  const THIS_YEAR = new Date().getFullYear();
+  const EARLIEST_BIRTH_YEAR = 1900;
+
+  const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+  });
+
+  /* ---------------------------------------------------------------- state */
+
+  const state = {
+    user: null,
+    profile: null,
+    visits: new Map(),        // country -> { visit_count, first_year }
+    stats: new Map(),         // country -> { visitors, mean_visits, mean_age }
+    travellers: 0,
+    maxVisitors: 0,
+    mode: 'mine',
+    selected: null,
+    features: [],
+    names: [],
+    byName: new Map(),
+    size: { w: 960, h: 500 },
+    handledUser: null
+  };
+
+  /* -------------------------------------------------------------- elements */
+
+  const $ = (id) => document.getElementById(id);
+
+  const screens = {
+    loading: $('screen-loading'),
+    auth: $('screen-auth'),
+    profile: $('screen-profile'),
+    app: $('screen-app')
+  };
+
+  const authForm = $('auth-form');
+  const authEmail = $('auth-email');
+  const authSend = $('auth-send');
+  const authSent = $('auth-sent');
+  const authSentLine = $('auth-sent-line');
+  const authAgain = $('auth-again');
+
+  const profileForm = $('profile-form');
+  const birthYear = $('birth-year');
+  const birthCountry = $('birth-country');
+
+  const frame = $('frame');
+  const legend = $('legend');
+  const travellersEl = $('travellers');
+  const modeMine = $('mode-mine');
+  const modeGroup = $('mode-group');
+
+  const panel = $('panel');
+  const panelTitle = $('panel-title');
+  const panelMine = $('panel-mine');
+  const panelGroup = $('panel-group');
+  const visitButtons = $('visit-buttons');
+  const yearInput = $('year-input');
+  const groupVisitors = $('group-visitors');
+  const groupVisits = $('group-visits');
+  const groupAge = $('group-age');
+
+  birthYear.min = EARLIEST_BIRTH_YEAR;
+  birthYear.max = THIS_YEAR;
+
+  function show(name) {
+    Object.keys(screens).forEach((k) => { screens[k].hidden = k !== name; });
+  }
+
+  /* ------------------------------------------------------------------ map */
+
+  const svg = d3.select('#map');
+  const defs = svg.append('defs');
+  const gZoom = svg.append('g');
+  const spherePath = gZoom.append('path').attr('class', 'sphere');
+  const gCountries = gZoom.append('g');
+  const gFx = gZoom.append('g').attr('pointer-events', 'none');
+
+  const projection = d3.geoNaturalEarth1();
+  const geoPath = d3.geoPath(projection);
+  let zoom = null;
+  let clipSeq = 0;
+
+  async function loadWorld() {
+    const topo = await d3.json(WORLD_URL);
+    const collection = topojson.feature(topo, topo.objects.countries);
+    state.features = collection.features.filter((f) => f.properties && f.properties.name);
+    state.byName = new Map(state.features.map((f) => [f.properties.name, f]));
+    state.names = state.features
+      .map((f) => f.properties.name)
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  function buildMap() {
+    zoom = d3.zoom()
+      .scaleExtent([1, 60])
+      .on('zoom', (event) => gZoom.attr('transform', event.transform));
+
+    svg.call(zoom).on('dblclick.zoom', null);
+
+    gCountries.selectAll('path')
+      .data(state.features, (d) => d.properties.name)
+      .join('path')
+      .attr('class', 'country')
+      .on('click', (event, d) => selectCountry(d.properties.name));
+
+    sizeMap();
+    new ResizeObserver(() => {
+      clearTimeout(sizeMap.timer);
+      sizeMap.timer = setTimeout(sizeMap, 120);
+    }).observe(frame);
+  }
+
+  function sizeMap() {
+    const rect = frame.getBoundingClientRect();
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
+    if (w < 2 || h < 2) return;
+
+    state.size = { w: w, h: h };
+    svg.attr('viewBox', '0 0 ' + w + ' ' + h);
+    projection.fitExtent([[14, 14], [w - 14, h - 14]], { type: 'Sphere' });
+    spherePath.attr('d', geoPath({ type: 'Sphere' }));
+    gCountries.selectAll('path').attr('d', geoPath);
+
+    if (zoom) {
+      zoom.extent([[0, 0], [w, h]]).translateExtent([[0, 0], [w, h]]);
+    }
+  }
+
+  function fillFor(name) {
+    if (state.mode === 'mine') {
+      const v = state.visits.get(name);
+      return v ? DEPTH[v.visit_count] : PARCHMENT;
+    }
+    const s = state.stats.get(name);
+    if (!s || !s.visitors) return PARCHMENT;
+    const max = state.maxVisitors || 1;
+    const bucket = Math.min(4, Math.max(1, Math.ceil((s.visitors / max) * 4)));
+    return DEPTH[bucket];
+  }
+
+  function paint() {
+    gCountries.selectAll('path').style('fill', (d) => fillFor(d.properties.name));
+  }
+
+  function countryNode(name) {
+    return gCountries.selectAll('path').filter((d) => d.properties.name === name);
+  }
+
+  function paintCountry(name) {
+    countryNode(name).style('fill', fillFor(name));
+  }
+
+  function scratchReveal(name) {
+    const feature = state.byName.get(name);
+    const node = countryNode(name);
+    if (!feature || node.empty()) return;
+
+    const b = geoPath.bounds(feature);
+    const pad = 2;
+    const x = b[0][0] - pad;
+    const y = b[0][1] - pad;
+    const w = (b[1][0] - b[0][0]) + pad * 2;
+    const h = (b[1][1] - b[0][1]) + pad * 2;
+    const id = 'scratch-' + (++clipSeq);
+
+    const rect = defs.append('clipPath')
+      .attr('id', id)
+      .attr('clipPathUnits', 'userSpaceOnUse')
+      .append('rect')
+      .attr('x', x).attr('y', y).attr('height', h).attr('width', 0);
+
+    node.attr('clip-path', 'url(#' + id + ')');
+
+    const shimmer = gFx.append('path')
+      .attr('d', geoPath(feature))
+      .attr('fill', GOLD)
+      .attr('opacity', 0.9)
+      .attr('clip-path', 'url(#' + id + ')');
+
+    shimmer.transition().duration(520).ease(d3.easeCubicOut)
+      .attr('opacity', 0)
+      .remove();
+
+    rect.transition().duration(500).ease(d3.easeCubicOut)
+      .attr('width', w)
+      .on('end interrupt', () => {
+        if (node.attr('clip-path') === 'url(#' + id + ')') node.attr('clip-path', null);
+        defs.select('#' + id).remove();
+      });
+  }
+
+  function zoomToCountry(name) {
+    const feature = state.byName.get(name);
+    if (!feature || !zoom) return;
+    const w = state.size.w;
+    const h = state.size.h;
+    const b = geoPath.bounds(feature);
+    const dx = Math.max(b[1][0] - b[0][0], 1);
+    const dy = Math.max(b[1][1] - b[0][1], 1);
+    const k = Math.max(1, Math.min(60, 0.55 / Math.max(dx / w, dy / h)));
+    const cx = (b[0][0] + b[1][0]) / 2;
+    const cy = (b[0][1] + b[1][1]) / 2;
+
+    svg.transition().duration(800).call(
+      zoom.transform,
+      d3.zoomIdentity.translate(w / 2, h / 2).scale(k).translate(-cx, -cy)
+    );
+  }
+
+  $('zoom-in').addEventListener('click', () => {
+    if (zoom) svg.transition().duration(300).call(zoom.scaleBy, 1.7);
+  });
+
+  $('zoom-out').addEventListener('click', () => {
+    if (zoom) svg.transition().duration(300).call(zoom.scaleBy, 1 / 1.7);
+  });
+
+  $('zoom-reset').addEventListener('click', () => {
+    if (zoom) svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+  });
+
+  /* ---------------------------------------------------------------- panel */
+
+  function selectCountry(name) {
+    state.selected = name;
+    gCountries.selectAll('path').classed('is-selected', (d) => d.properties.name === name);
+    renderPanel();
+    panel.hidden = false;
+  }
+
+  function closePanel() {
+    panel.hidden = true;
+    state.selected = null;
+    gCountries.selectAll('path').classed('is-selected', false);
+  }
+
+  function oneDecimal(value) {
+    if (value === null || value === undefined) return '—';
+    const n = Number(value);
+    if (!isFinite(n)) return '—';
+    const r = Math.round(n * 10) / 10;
+    return r % 1 === 0 ? String(r) : r.toFixed(1);
+  }
+
+  function renderPanel() {
+    const name = state.selected;
+    if (!name) return;
+    panelTitle.textContent = name;
+
+    if (state.mode === 'mine') {
+      panelMine.hidden = false;
+      panelGroup.hidden = true;
+
+      const v = state.visits.get(name);
+      const count = v ? v.visit_count : 0;
+      Array.prototype.forEach.call(visitButtons.children, (btn) => {
+        btn.classList.toggle('is-active', Number(btn.dataset.visits) === count);
+      });
+
+      yearInput.disabled = !v;
+      yearInput.value = v && v.first_year ? String(v.first_year) : '';
+      if (!v || v.first_year) yearInput.classList.remove('wants-year');
+      return;
+    }
+
+    panelMine.hidden = true;
+    panelGroup.hidden = false;
+
+    const s = state.stats.get(name);
+    const visitors = s ? Number(s.visitors) : 0;
+    groupVisitors.textContent = visitors + ' of ' + state.travellers + ' have been here';
+    groupVisits.textContent = 'Average visits: ' + (visitors ? oneDecimal(s.mean_visits) : '—');
+    groupAge.textContent = 'Average age on first visit: ' +
+      (s && s.mean_age !== null && s.mean_age !== undefined ? oneDecimal(s.mean_age) : '—');
+  }
+
+  visitButtons.addEventListener('click', (event) => {
+    const btn = event.target.closest('button[data-visits]');
+    if (!btn || !state.selected || state.mode !== 'mine') return;
+
+    const name = state.selected;
+    const next = Number(btn.dataset.visits);
+    const previous = state.visits.get(name);
+    const previousCount = previous ? previous.visit_count : 0;
+    if (next === previousCount) return;
+
+    if (next === 0) {
+      state.visits.delete(name);
+    } else {
+      state.visits.set(name, {
+        visit_count: next,
+        first_year: previous ? previous.first_year : null
+      });
+    }
+
+    renderPanel();
+    paintCountry(name);
+    if (previousCount === 0 && next > 0) {
+      scratchReveal(name);
+      if (!yearInput.value) {
+        yearInput.classList.add('wants-year');
+        yearInput.focus();
+      }
+    }
+    persistVisit(name);
+  });
+
+  let yearTimer = null;
+
+  function commitYear(revertIfInvalid) {
+    const name = state.selected;
+    const v = name ? state.visits.get(name) : null;
+    if (!v) return;
+
+    const raw = yearInput.value.trim();
+
+    if (raw === '') {
+      if (v.first_year !== null) {
+        v.first_year = null;
+        persistVisit(name);
+      }
+      yearInput.classList.add('wants-year');
+      return;
+    }
+
+    const n = Number(raw);
+    const valid = /^\d{4}$/.test(raw) &&
+      n >= state.profile.birth_year &&
+      n <= THIS_YEAR;
+
+    if (!valid) {
+      if (revertIfInvalid) yearInput.value = v.first_year ? String(v.first_year) : '';
+      return;
+    }
+
+    yearInput.classList.remove('wants-year');
+    if (v.first_year !== n) {
+      v.first_year = n;
+      persistVisit(name);
+    }
+  }
+
+  yearInput.addEventListener('input', () => {
+    clearTimeout(yearTimer);
+    yearTimer = setTimeout(() => commitYear(false), 450);
+  });
+
+  yearInput.addEventListener('blur', () => {
+    clearTimeout(yearTimer);
+    commitYear(true);
+  });
+
+  $('panel-close').addEventListener('click', closePanel);
+
+  /* ------------------------------------------------------------ persistence */
+
+  async function persistVisit(name) {
+    if (!state.user) return;
+    const v = state.visits.get(name);
+    try {
+      if (!v) {
+        await client.from('visits').delete()
+          .eq('user_id', state.user.id)
+          .eq('country', name);
+      } else {
+        await client.from('visits').upsert({
+          user_id: state.user.id,
+          country: name,
+          visit_count: v.visit_count,
+          first_year: v.first_year,
+          updated_at: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function loadVisits() {
+    const res = await client.from('visits').select('country,visit_count,first_year');
+    const rows = res.data || [];
+    state.visits = new Map(rows.map((r) => [
+      r.country,
+      { visit_count: r.visit_count, first_year: r.first_year }
+    ]));
+  }
+
+  async function loadGroup() {
+    const [stats, count] = await Promise.all([
+      client.rpc('group_stats'),
+      client.rpc('traveller_count')
+    ]);
+
+    const rows = stats.data || [];
+    state.stats = new Map(rows.map((r) => [r.country, {
+      visitors: Number(r.visitors),
+      mean_visits: r.mean_visits,
+      mean_age: r.mean_age
+    }]));
+    state.maxVisitors = rows.reduce((m, r) => Math.max(m, Number(r.visitors)), 0);
+    state.travellers = Number(count.data) || 0;
+
+    travellersEl.textContent = state.travellers +
+      (state.travellers === 1 ? ' traveller' : ' travellers');
+  }
+
+  /* ----------------------------------------------------------------- modes */
+
+  async function setMode(mode) {
+    state.mode = mode;
+    modeMine.classList.toggle('is-active', mode === 'mine');
+    modeGroup.classList.toggle('is-active', mode === 'group');
+    legend.hidden = mode !== 'mine';
+    travellersEl.hidden = mode !== 'group';
+
+    if (mode === 'group') await loadGroup();
+    paint();
+    if (state.selected) renderPanel();
+  }
+
+  modeMine.addEventListener('click', () => setMode('mine'));
+  modeGroup.addEventListener('click', () => setMode('group'));
+
+  /* ------------------------------------------------------------------- csv */
+
+  function csvCell(value) {
+    const s = String(value);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function downloadCsv() {
+    const rows = [['country', 'visits', 'first_visited']];
+    state.names.forEach((name) => {
+      const v = state.visits.get(name);
+      const visits = v ? (v.visit_count === 4 ? '4+' : String(v.visit_count)) : '0';
+      const year = v && v.first_year ? String(v.first_year) : '';
+      rows.push([name, visits, year]);
+    });
+
+    const csv = rows.map((r) => r.map(csvCell).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'my-scratch-map.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  $('csv-btn').addEventListener('click', downloadCsv);
+
+  /* ------------------------------------------------------------- typeahead */
+
+  function typeahead(input, list, getItems, onPick) {
+    let items = [];
+    let index = -1;
+
+    function close() {
+      list.hidden = true;
+      list.innerHTML = '';
+      index = -1;
+      input.setAttribute('aria-expanded', 'false');
+    }
+
+    function highlight() {
+      Array.prototype.forEach.call(list.children, (li, i) => {
+        li.classList.toggle('is-active', i === index);
+      });
+    }
+
+    function pick(i) {
+      const name = items[i];
+      if (name === undefined) return;
+      input.value = name;
+      close();
+      onPick(name);
+    }
+
+    function open() {
+      const term = input.value.trim().toLowerCase();
+      if (!term) return close();
+
+      items = getItems()
+        .filter((n) => n.toLowerCase().indexOf(term) !== -1)
+        .sort((a, b) => {
+          const sa = a.toLowerCase().indexOf(term) === 0 ? 0 : 1;
+          const sb = b.toLowerCase().indexOf(term) === 0 ? 0 : 1;
+          return sa - sb || a.localeCompare(b);
+        })
+        .slice(0, 8);
+
+      if (!items.length) return close();
+
+      list.innerHTML = '';
+      items.forEach((name, i) => {
+        const li = document.createElement('li');
+        li.textContent = name;
+        li.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          pick(i);
+        });
+        list.appendChild(li);
+      });
+      index = -1;
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+
+    input.addEventListener('input', open);
+    input.addEventListener('focus', open);
+    input.addEventListener('blur', () => setTimeout(close, 150));
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') return close();
+      if (list.hidden) return;
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        index = Math.min(items.length - 1, index + 1);
+        highlight();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        index = Math.max(0, index - 1);
+        highlight();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        pick(index < 0 ? 0 : index);
+      }
+    });
+  }
+
+  typeahead($('country-search'), $('country-search-list'), () => state.names, (name) => {
+    zoomToCountry(name);
+    selectCountry(name);
+  });
+
+  typeahead(birthCountry, $('birth-country-list'), () => state.names, () => {});
+
+  /* ------------------------------------------------------------------ auth */
+
+  authForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const email = authEmail.value.trim();
+    if (!email) return;
+
+    authSend.disabled = true;
+    const { error } = await client.auth.signInWithOtp({
+      email: email,
+      options: { emailRedirectTo: window.location.origin }
+    });
+    authSend.disabled = false;
+
+    if (error) {
+      authSentLine.textContent = 'That did not send. Try again.';
+    } else {
+      authSentLine.textContent = 'A link is on its way to ' + email + '.';
+    }
+    authForm.hidden = true;
+    authSent.hidden = false;
+  });
+
+  authAgain.addEventListener('click', () => {
+    authSent.hidden = true;
+    authForm.hidden = false;
+    authEmail.focus();
+  });
+
+  $('signout').addEventListener('click', async () => {
+    await client.auth.signOut();
+    window.location.replace(window.location.origin + window.location.pathname);
+  });
+
+  profileForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const raw = birthYear.value.trim();
+    const year = Number(raw);
+    if (!/^\d{4}$/.test(raw) || year < EARLIEST_BIRTH_YEAR || year > THIS_YEAR) {
+      birthYear.focus();
+      return;
+    }
+
+    const typed = birthCountry.value.trim();
+    const country = state.byName.has(typed) ? typed : null;
+
+    const { error } = await client.from('profiles').upsert({
+      id: state.user.id,
+      birth_year: year,
+      birth_country: country
+    });
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    state.profile = { birth_year: year, birth_country: country };
+    await enterApp();
+  });
+
+  async function enterApp() {
+    yearInput.min = state.profile.birth_year;
+    yearInput.max = THIS_YEAR;
+    await loadVisits();
+    show('app');
+    sizeMap();
+    paint();
+  }
+
+  async function handleSession(session) {
+    if (!session) {
+      state.user = null;
+      state.handledUser = null;
+      show('auth');
+      return;
+    }
+    if (state.handledUser === session.user.id) return;
+    state.handledUser = session.user.id;
+    state.user = session.user;
+
+    const { data: profile } = await client
+      .from('profiles')
+      .select('birth_year,birth_country')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (!profile) {
+      show('profile');
+      birthYear.focus();
+      return;
+    }
+
+    state.profile = profile;
+    await enterApp();
+  }
+
+  /* ------------------------------------------------------------------ boot */
+
+  (async function boot() {
+    await loadWorld();
+    buildMap();
+
+    const { data } = await client.auth.getSession();
+    await handleSession(data ? data.session : null);
+
+    client.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        state.handledUser = null;
+        show('auth');
+        return;
+      }
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        handleSession(session);
+      }
+    });
+  })();
+})();
