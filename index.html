@@ -76,6 +76,8 @@
     </div>
   </header>
 
+  <div class="search-bar" id="search-bar"></div>
+
   <main class="mapwrap">
     <div class="frame" id="frame">
       <svg id="map" role="img" aria-label="World map"></svg>
@@ -91,6 +93,8 @@
           <button type="button" class="plate plate-square" id="zoom-out" aria-label="Zoom out">&minus;</button>
         </div>
       </div>
+
+      <div class="map-controls" id="map-controls"></div>
 
       <div class="map-readout">
         <p class="readout" id="tally"></p>
@@ -132,6 +136,10 @@
       </div>
     </aside>
   </main>
+
+  <div class="below-map" id="below-map">
+    <div class="actions" id="actions"></div>
+  </div>
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" defer></script>

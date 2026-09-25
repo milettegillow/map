@@ -12,6 +12,8 @@
   const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json';
   const THIS_YEAR = new Date().getFullYear();
   const EARLIEST_BIRTH_YEAR = 1900;
+  const MOBILE = window.matchMedia('(max-width: 640px)');
+  const FRAME_PAD = { desktop: 14, mobile: 8 };
   const MAX_SEARCH_ZOOM = 24;
   const MAX_SEARCH_RESULTS = 50;
 
@@ -100,6 +102,18 @@
   const birthCountry = $('birth-country');
 
   const frame = $('frame');
+  const searchBar = $('search-bar');
+  const belowMap = $('below-map');
+  const actions = $('actions');
+  const mapControls = $('map-controls');
+  const mapTools = document.querySelector('.map-tools');
+  const toolbar = document.querySelector('.toolbar');
+  const zoomers = document.querySelector('.zoomers');
+  const searchField = document.querySelector('.search');
+  const mapReadout = document.querySelector('.map-readout');
+  const csvBtn = $('csv-btn');
+  const signoutBtn = $('signout');
+  const wholeWorld = $('whole-world');
   const legend = $('legend');
   const legendItems = Array.prototype.slice.call(legend.children);
   const modeMine = $('mode-mine');
@@ -235,15 +249,57 @@
     }).observe(frame);
   }
 
+  // Phone and desktop want these controls in different parents, which CSS alone
+  // cannot do, so the nodes themselves move. They keep their listeners.
+  function applyLayout() {
+    if (MOBILE.matches) {
+      searchBar.appendChild(searchField);
+      mapControls.appendChild(zoomers);
+      mapControls.appendChild(wholeWorld);
+      belowMap.appendChild(mapReadout);
+      belowMap.appendChild(actions);
+      actions.appendChild(csvBtn);
+      actions.appendChild(signoutBtn);
+    } else {
+      mapTools.appendChild(searchField);
+      mapTools.appendChild(zoomers);
+      toolbar.appendChild(csvBtn);
+      toolbar.appendChild(signoutBtn);
+      frame.appendChild(mapReadout);
+      mapReadout.appendChild(wholeWorld);
+      frame.style.height = '';
+    }
+    sizeMap();
+  }
+
   function sizeMap() {
-    const rect = frame.getBoundingClientRect();
-    const w = Math.round(rect.width);
-    const h = Math.round(rect.height);
-    if (w < 2 || h < 2) return;
+    const w = frame.clientWidth;
+    if (w < 2) return;
+
+    let h;
+
+    if (MOBILE.matches) {
+      // No letterboxing on a phone: ask the projection how tall it needs to be
+      // at this width, then make the frame exactly that, borders included.
+      const pad = FRAME_PAD.mobile;
+      projection.fitWidth(w - pad * 2, { type: 'Sphere' });
+      const sphere = geoPath.bounds({ type: 'Sphere' });
+      h = Math.ceil(sphere[1][1] - sphere[0][1]) + pad * 2;
+
+      const borders = frame.offsetHeight - frame.clientHeight;
+      const target = (h + borders) + 'px';
+      if (frame.style.height !== target) frame.style.height = target;
+
+      projection.fitExtent([[pad, pad], [w - pad, h - pad]], { type: 'Sphere' });
+    } else {
+      const pad = FRAME_PAD.desktop;
+      h = frame.clientHeight;
+      if (h < 2) return;
+      projection.fitExtent([[pad, pad], [w - pad, h - pad]], { type: 'Sphere' });
+    }
 
     state.size = { w: w, h: h };
     svg.attr('viewBox', '0 0 ' + w + ' ' + h);
-    projection.fitExtent([[14, 14], [w - 14, h - 14]], { type: 'Sphere' });
     spherePath.attr('d', geoPath({ type: 'Sphere' }));
     gCountries.selectAll('path').attr('d', geoPath);
 
@@ -903,6 +959,8 @@
   (async function boot() {
     await loadWorld();
     buildMap();
+    applyLayout();
+    MOBILE.addEventListener('change', applyLayout);
     updateLegend();
 
     const { data } = await client.auth.getSession();

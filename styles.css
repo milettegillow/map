@@ -299,6 +299,11 @@ input.wants-year {
   vector-effect: non-scaling-stroke;
 }
 
+/* Containers used only by the phone layout; app.js moves nodes into them. */
+.search-bar,
+.below-map,
+.map-controls { display: none; }
+
 /* --------------------------------------------------- map overlay bits */
 
 .map-tools {
@@ -446,31 +451,97 @@ input.wants-year {
 
 /* ---------------------------------------------------------- responsive */
 
-@media (max-width: 720px) {
-  body { font-size: 16px; }
+@media (max-width: 640px) {
+  html { height: auto; min-height: 100%; }
+
+  body {
+    font-size: 16px;
+    height: auto;
+    min-height: 100%;
+  }
+
+  /* The phone layout is a scrolling document, not a fixed-height app shell. */
+  .screen-app {
+    height: auto;
+    min-height: 100%;
+  }
+
+  /* ---- header: title, then a full-width two-up toggle ---- */
 
   .topbar {
-    justify-content: flex-start;
-    padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
-  }
-
-  .map-tools {
-    left: 0.75rem;
-    right: 0.75rem;
-    top: 0.75rem;
-    align-items: stretch;
-  }
-
-  .search { width: 100%; }
-
-  .map-readout {
-    left: 0.75rem;
-    right: 0.75rem;
-    bottom: 0.75rem;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.4rem;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: calc(0.5rem + env(safe-area-inset-top, 0px)) 0.75rem 0.5rem;
   }
+
+  .toolbar { width: 100%; }
+  .modes { width: 100%; }
+  .modes .plate { flex: 1 1 50%; text-align: center; }
+
+  /* ---- search above the frame; its dropdown still falls over the map ---- */
+
+  .search-bar {
+    display: block;
+    padding: 0 0.75rem 0.5rem;
+  }
+
+  .search-bar .search { width: 100%; }
+
+  /* ---- the frame is exactly as tall as the map needs ---- */
+
+  .mapwrap {
+    flex: none;
+    padding: 0 0.75rem;
+  }
+
+  .frame { height: auto; }        /* app.js sets the pixel height */
+
+  .frame::after { inset: 3px; }
+
+  .map-tools { display: none; }   /* emptied by applyLayout */
+
+  .map-controls {
+    display: flex;
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    z-index: 5;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0.3rem;
+  }
+
+  .map-controls .zoomers {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0.3rem;
+  }
+
+  .map-controls .plate { padding: 0.25rem 0.5rem; }
+  .map-controls .plate-square { width: 1.9rem; padding: 0.25rem 0; }
+  .map-controls #whole-world { margin-left: 0; }
+
+  /* ---- rows below the map ---- */
+
+  .below-map {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 0.75rem calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .below-map .map-readout {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px;
+    pointer-events: auto;
+  }
+
+  .actions { display: flex; gap: 8px; }
+  .actions .plate { flex: 1 1 50%; text-align: center; }
 
   .readout {
     font-size: 0.95rem;
@@ -478,6 +549,8 @@ input.wants-year {
   }
 
   .legend { gap: 0.7rem; }
+
+  /* ---- the panel stays a bottom sheet ---- */
 
   .panel {
     position: fixed;
