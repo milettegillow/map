@@ -59,12 +59,25 @@ p { margin: 0; }
   padding: 2rem 1.25rem;
 }
 
+/* The logged-out and onboarding screens sit on the old world map, washed
+   back with parchment so the engraving still reads through. */
+#screen-auth,
+#screen-profile {
+  background-image:
+    linear-gradient(rgba(242, 232, 208, 0.35), rgba(242, 232, 208, 0.35)),
+    url("assets/world-map.webp");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 .card {
   width: min(28rem, 100%);
   padding: 2rem clamp(1.25rem, 4vw, 2.25rem) 2.25rem;
-  background: rgba(248, 241, 222, 0.6);
+  background: var(--parchment);
   border: 1px solid var(--ink);
   border-radius: 2px;
+  box-shadow: 0 10px 34px rgba(42, 30, 18, 0.38);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -256,12 +269,23 @@ input.wants-year {
 }
 
 .country.is-selected {
-  stroke: var(--ink);
-  stroke-width: 1.8;
+  stroke: var(--gold);
+  stroke-width: 3;
+}
+
+.country.is-pulsing {
+  animation: country-pulse 620ms ease-out;
+}
+
+@keyframes country-pulse {
+  0%   { stroke-width: 9; stroke-opacity: 0.55; }
+  45%  { stroke-width: 4.5; stroke-opacity: 1; }
+  70%  { stroke-width: 6; stroke-opacity: 0.85; }
+  100% { stroke-width: 3; stroke-opacity: 1; }
 }
 
 .sphere {
-  fill: none;
+  fill: #c3dbd3;
   stroke: var(--sepia);
   stroke-width: 0.8;
   vector-effect: non-scaling-stroke;
@@ -269,19 +293,30 @@ input.wants-year {
 
 /* --------------------------------------------------- map overlay bits */
 
-.search {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  width: min(17rem, calc(100% - 7rem));
-  z-index: 4;
-}
-
-.zoomers {
+.map-tools {
   position: absolute;
   top: 1rem;
   right: 1rem;
-  z-index: 4;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+.search {
+  width: 280px;
+  max-width: 100%;
+}
+
+.search input {
+  background: var(--parchment);
+  border: 1px solid var(--ink);
+  box-shadow: var(--plate-shadow);
+  padding: 0.55rem 0.7rem;
+}
+
+.zoomers {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -290,7 +325,7 @@ input.wants-year {
 
 .legend {
   position: absolute;
-  left: 1rem;
+  right: 1rem;
   bottom: 1rem;
   z-index: 4;
   display: flex;
@@ -330,7 +365,7 @@ input.wants-year {
   margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 15rem;
+  max-height: 18rem;
   overflow-y: auto;
   background: var(--parchment-pale);
   border: 1px solid var(--ink);
@@ -354,7 +389,7 @@ input.wants-year {
 .panel {
   position: absolute;
   top: clamp(0.5rem, 1.5vw, 1rem);
-  right: clamp(0.5rem, 1.5vw, 1rem);
+  left: clamp(0.5rem, 1.5vw, 1rem);
   z-index: 6;
   width: min(21rem, calc(100% - 2rem));
   max-height: calc(100% - 2rem);
@@ -391,9 +426,14 @@ input.wants-year {
     padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
   }
 
-  .search {
-    width: calc(100% - 6.5rem);
+  .map-tools {
+    left: 0.75rem;
+    right: 0.75rem;
+    top: 0.75rem;
+    align-items: stretch;
   }
+
+  .search { width: 100%; }
 
   .legend {
     font-size: 0.95rem;

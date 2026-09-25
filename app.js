@@ -9,6 +9,8 @@
   const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json';
   const THIS_YEAR = new Date().getFullYear();
   const EARLIEST_BIRTH_YEAR = 1900;
+  const MAX_SEARCH_ZOOM = 24;
+  const MAX_SEARCH_RESULTS = 50;
 
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
@@ -201,21 +203,66 @@
       });
   }
 
+  // The biggest polygon of a multi-part feature, used when a country is cut in
+  // two by the antimeridian (Fiji, the United States) — the whole feature then
+  // measures a full 360 degrees wide and would not zoom at all.
+  function largestPart(feature) {
+    const geometry = feature.geometry;
+    if (!geometry || geometry.type !== 'MultiPolygon') return feature;
+
+    let best = feature;
+    let bestArea = -1;
+    geometry.coordinates.forEach((coordinates) => {
+      const polygon = { type: 'Polygon', coordinates: coordinates };
+      const area = d3.geoArea(polygon);
+      if (area > bestArea) {
+        bestArea = area;
+        best = polygon;
+      }
+    });
+    return best;
+  }
+
+  function lonSpan(bounds) {
+    const span = bounds[1][0] - bounds[0][0];
+    return span < 0 ? span + 360 : span;
+  }
+
+  // Projected bounds break down for anything near the antimeridian — Russia
+  // comes out as wide as the whole map — so size the zoom from the spherical
+  // extent instead and centre on the spherical centroid.
   function zoomToCountry(name) {
     const feature = state.byName.get(name);
     if (!feature || !zoom) return;
+
     const w = state.size.w;
     const h = state.size.h;
-    const b = geoPath.bounds(feature);
-    const dx = Math.max(b[1][0] - b[0][0], 1);
-    const dy = Math.max(b[1][1] - b[0][1], 1);
-    const k = Math.max(1, Math.min(60, 0.55 / Math.max(dx / w, dy / h)));
-    const cx = (b[0][0] + b[1][0]) / 2;
-    const cy = (b[0][1] + b[1][1]) / 2;
+    const sphere = geoPath.bounds({ type: 'Sphere' });
+    const worldW = sphere[1][0] - sphere[0][0];
+    const worldH = sphere[1][1] - sphere[0][1];
 
-    svg.transition().duration(800).call(
+    let target = feature;
+    let b = d3.geoBounds(target);
+    let spanLon = lonSpan(b);
+
+    if (spanLon > 350) {
+      target = largestPart(feature);
+      b = d3.geoBounds(target);
+      spanLon = lonSpan(b);
+    }
+
+    const spanLat = Math.abs(b[1][1] - b[0][1]);
+
+    const wide = Math.max((spanLon / 360) * worldW, 1) / w;
+    const tall = Math.max((spanLat / 180) * worldH, 1) / h;
+    const k = Math.max(1, Math.min(MAX_SEARCH_ZOOM, 0.55 / Math.max(wide, tall)));
+
+    const centre = projection(d3.geoCentroid(target));
+    if (!centre) return;
+
+    svg.transition().duration(750).ease(d3.easeCubicInOut).call(
       zoom.transform,
-      d3.zoomIdentity.translate(w / 2, h / 2).scale(k).translate(-cx, -cy)
+      d3.zoomIdentity.translate(w / 2, h / 2).scale(k).translate(-centre[0], -centre[1])
     );
   }
 
@@ -235,7 +282,18 @@
 
   function selectCountry(name) {
     state.selected = name;
-    gCountries.selectAll('path').classed('is-selected', (d) => d.properties.name === name);
+
+    const all = gCountries.selectAll('path');
+    all.classed('is-selected', false).classed('is-pulsing', false);
+
+    const node = countryNode(name);
+    if (!node.empty()) {
+      // Raise it so neighbouring outlines cannot paint over the gold edge.
+      node.raise().classed('is-selected', true);
+      node.node().getBoundingClientRect();   // restart the pulse animation
+      node.classed('is-pulsing', true);
+    }
+
     renderPanel();
     panel.hidden = false;
   }
@@ -243,7 +301,9 @@
   function closePanel() {
     panel.hidden = true;
     state.selected = null;
-    gCountries.selectAll('path').classed('is-selected', false);
+    gCountries.selectAll('path')
+      .classed('is-selected', false)
+      .classed('is-pulsing', false);
   }
 
   function oneDecimal(value) {
@@ -478,6 +538,7 @@
     function highlight() {
       Array.prototype.forEach.call(list.children, (li, i) => {
         li.classList.toggle('is-active', i === index);
+        if (i === index) li.scrollIntoView({ block: 'nearest' });
       });
     }
 
@@ -500,7 +561,7 @@
           const sb = b.toLowerCase().indexOf(term) === 0 ? 0 : 1;
           return sa - sb || a.localeCompare(b);
         })
-        .slice(0, 8);
+        .slice(0, MAX_SEARCH_RESULTS);
 
       if (!items.length) return close();
 

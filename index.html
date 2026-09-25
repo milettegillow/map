@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>The Scratch Map</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%BA%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
@@ -80,15 +81,17 @@
     <div class="frame" id="frame">
       <svg id="map" role="img" aria-label="World map"></svg>
 
-      <div class="field typeahead search">
-        <input type="text" id="country-search" placeholder="Find a country" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="Find a country">
-        <ul class="typeahead-list" id="country-search-list" hidden></ul>
-      </div>
+      <div class="map-tools">
+        <div class="field typeahead search">
+          <input type="text" id="country-search" placeholder="Search for a country" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-label="Search for a country">
+          <ul class="typeahead-list" id="country-search-list" hidden></ul>
+        </div>
 
-      <div class="zoomers">
-        <button type="button" class="plate plate-square" id="zoom-in" aria-label="Zoom in">+</button>
-        <button type="button" class="plate plate-square" id="zoom-out" aria-label="Zoom out">&minus;</button>
-        <button type="button" class="plate" id="zoom-reset">Reset</button>
+        <div class="zoomers">
+          <button type="button" class="plate plate-square" id="zoom-in" aria-label="Zoom in">+</button>
+          <button type="button" class="plate plate-square" id="zoom-out" aria-label="Zoom out">&minus;</button>
+          <button type="button" class="plate" id="zoom-reset">Reset</button>
+        </div>
       </div>
 
       <div class="legend" id="legend">
