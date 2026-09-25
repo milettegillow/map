@@ -91,7 +91,6 @@
   const frame = $('frame');
   const legend = $('legend');
   const legendItems = Array.prototype.slice.call(legend.children);
-  const travellersEl = $('travellers');
   const modeMine = $('mode-mine');
   const modeGroup = $('mode-group');
 
@@ -516,9 +515,6 @@
     }]));
     state.maxVisitors = rows.reduce((m, r) => Math.max(m, Number(r.visitors)), 0);
     state.travellers = Number(count.data) || 0;
-
-    travellersEl.textContent = state.travellers +
-      (state.travellers === 1 ? ' traveller' : ' travellers');
   }
 
   /* ---------------------------------------------------------------- legend */
@@ -580,8 +576,10 @@
       if (SOVEREIGN.has(name)) visits += stat.visitors;
     });
     const average = state.travellers ? visits / state.travellers : 0;
-    tally.textContent = 'Average traveller: ' + Math.round(average) + ' of ' +
-      SOVEREIGN_TOTAL + ' countries · ' + percentOfWorld(average) + '%';
+    tally.textContent = state.travellers +
+      (state.travellers === 1 ? ' traveller' : ' travellers') +
+      ' · on average ' + Math.round(average) + ' of ' + SOVEREIGN_TOTAL +
+      ' countries · ' + percentOfWorld(average) + '%';
   }
 
   /* ----------------------------------------------------------------- modes */
@@ -590,7 +588,6 @@
     state.mode = mode;
     modeMine.classList.toggle('is-active', mode === 'mine');
     modeGroup.classList.toggle('is-active', mode === 'group');
-    travellersEl.hidden = mode !== 'group';
 
     if (mode === 'group') await loadGroup();
     paint();
