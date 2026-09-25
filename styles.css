@@ -471,8 +471,9 @@ input.wants-year {
   .topbar {
     flex-direction: column;
     align-items: stretch;
-    gap: 0.5rem;
-    padding: calc(0.5rem + env(safe-area-inset-top, 0px)) 0.75rem 0.5rem;
+    gap: 12px;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 0.75rem 0;
+    border-bottom: 0;
   }
 
   .toolbar { width: 100%; }
@@ -483,7 +484,7 @@ input.wants-year {
 
   .search-bar {
     display: block;
-    padding: 0 0.75rem 0.5rem;
+    padding: 12px 0.75rem 0;
   }
 
   .search-bar .search { width: 100%; }
@@ -492,7 +493,7 @@ input.wants-year {
 
   .mapwrap {
     flex: none;
-    padding: 0 0.75rem;
+    padding: 12px 0.75rem 0;
   }
 
   .frame { height: auto; }        /* app.js sets the pixel height */
@@ -504,22 +505,22 @@ input.wants-year {
   .map-controls {
     display: flex;
     position: absolute;
-    right: 6px;
-    bottom: 6px;
+    right: 10px;
+    bottom: 10px;
     z-index: 5;
     flex-direction: row;
     align-items: stretch;
-    gap: 0.3rem;
+    gap: 0.25rem;
   }
 
   .map-controls .zoomers {
     flex-direction: row;
     align-items: stretch;
-    gap: 0.3rem;
+    gap: 0.25rem;
   }
 
-  .map-controls .plate { padding: 0.25rem 0.5rem; }
-  .map-controls .plate-square { width: 1.9rem; padding: 0.25rem 0; }
+  .map-controls .plate { padding: 0.2rem 0.45rem; }
+  .map-controls .plate-square { width: 1.75rem; padding: 0.2rem 0; }
   .map-controls #whole-world { margin-left: 0; }
 
   /* ---- rows below the map ---- */
@@ -528,17 +529,20 @@ input.wants-year {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 12px 0.75rem calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 12px 0.75rem calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
+  /* Tally and legend become full-width blocks in the same 12px rhythm, so
+     every block on the page shares one left and right edge. */
   .below-map .map-readout {
     position: static;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
     pointer-events: auto;
   }
+
+  .below-map .legend { justify-content: space-between; }
 
   .actions { display: flex; gap: 8px; }
   .actions .plate { flex: 1 1 50%; text-align: center; }
