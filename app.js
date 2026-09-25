@@ -386,7 +386,7 @@
     if (zoom) svg.transition().duration(300).call(zoom.scaleBy, 1 / 1.7);
   });
 
-  $('zoom-reset').addEventListener('click', () => {
+  $('whole-world').addEventListener('click', () => {
     if (zoom) svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
   });
 

@@ -171,6 +171,10 @@ input.wants-year {
 
 .plate-quiet { box-shadow: none; }
 
+.plate-compact {
+  padding: 0.28rem 0.6rem;
+}
+
 .plate-square {
   width: 2.35rem;
   padding: 0.4rem 0;
@@ -322,16 +326,23 @@ input.wants-year {
   gap: 0.35rem;
 }
 
+/* The bottom strip of the frame: readouts at the left, "Whole world" pushed to
+   the right. It spans the frame so the button stays in the corner at any width,
+   so the strip itself must not swallow drags meant for the map. */
 .map-readout {
   position: absolute;
   left: 1rem;
+  right: 1rem;
   bottom: 1rem;
   z-index: 4;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.6rem;
+  pointer-events: none;
 }
+
+.map-readout > * { pointer-events: auto; }
 
 .readout {
   padding: 0.45rem 0.75rem;
@@ -341,6 +352,8 @@ input.wants-year {
   font-size: 1rem;
   color: var(--ink);
 }
+
+#whole-world { margin-left: auto; }
 
 .legend {
   display: flex;
@@ -447,6 +460,7 @@ input.wants-year {
 
   .map-readout {
     left: 0.75rem;
+    right: 0.75rem;
     bottom: 0.75rem;
     flex-direction: column;
     align-items: flex-start;
