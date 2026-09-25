@@ -73,8 +73,11 @@ as $$
     v.country,
     count(*)::bigint as visitors,
     round(avg(v.visit_count), 1) as mean_visits,
+    -- Midpoint estimate: we know the year of birth and the year of the visit
+    -- but not the dates, so on average the traveller was half a year short of
+    -- the difference between them.
     round(
-      avg(v.first_year - p.birth_year) filter (where v.first_year is not null),
+      avg(v.first_year - p.birth_year - 0.5) filter (where v.first_year is not null),
       1
     ) as mean_age
   from public.visits v
