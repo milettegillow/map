@@ -12,6 +12,28 @@
   const MAX_SEARCH_ZOOM = 24;
   const MAX_SEARCH_RESULTS = 50;
 
+  // Countries whose map-data name is not what we want to show. The key on the
+  // left is what stays in the database, in sovereign.js and in the map data —
+  // only the label changes, so rows saved before this existed still match.
+  const DISPLAY_NAMES = {
+    'Czechia': 'Czech Republic'
+  };
+
+  const STORED_NAMES = {};
+  Object.keys(DISPLAY_NAMES).forEach((key) => {
+    STORED_NAMES[DISPLAY_NAMES[key].toLowerCase()] = key;
+  });
+
+  function displayName(key) {
+    return DISPLAY_NAMES[key] || key;
+  }
+
+  // The reverse: takes whatever someone typed and gives back the stored key.
+  function storedName(text) {
+    const trimmed = text.trim();
+    return STORED_NAMES[trimmed.toLowerCase()] || trimmed;
+  }
+
   // Only these count towards the tally. Everything else on the map — Greenland,
   // Taiwan, Kosovo and the rest — can still be scratched, it just does not count.
   const SOVEREIGN = new Set(
@@ -335,7 +357,7 @@
   function renderPanel() {
     const name = state.selected;
     if (!name) return;
-    panelTitle.textContent = name;
+    panelTitle.textContent = displayName(name);
 
     if (state.mode === 'mine') {
       panelMine.hidden = false;
@@ -548,12 +570,15 @@
 
   function downloadCsv() {
     const rows = [['country', 'visits', 'first_visited']];
-    state.names.forEach((name) => {
-      const v = state.visits.get(name);
-      const visits = v ? (v.visit_count === 4 ? '4+' : String(v.visit_count)) : '0';
-      const year = v && v.first_year ? String(v.first_year) : '';
-      rows.push([name, visits, year]);
-    });
+    state.names
+      .slice()
+      .sort((a, b) => displayName(a).localeCompare(displayName(b)))
+      .forEach((name) => {
+        const v = state.visits.get(name);
+        const visits = v ? (v.visit_count === 4 ? '4+' : String(v.visit_count)) : '0';
+        const year = v && v.first_year ? String(v.first_year) : '';
+        rows.push([displayName(name), visits, year]);
+      });
 
     const csv = rows.map((r) => r.map(csvCell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -591,9 +616,23 @@
     function pick(i) {
       const name = items[i];
       if (name === undefined) return;
-      input.value = name;
+      input.value = displayName(name);
       close();
       onPick(name);
+    }
+
+    // Match on the stored name or the shown one, so "Czech" and "Czechia" both
+    // reach the Czech Republic.
+    function hit(name, term) {
+      return Math.min(
+        indexOrFar(name, term),
+        indexOrFar(displayName(name), term)
+      );
+    }
+
+    function indexOrFar(text, term) {
+      const at = text.toLowerCase().indexOf(term);
+      return at === -1 ? Infinity : at;
     }
 
     function open() {
@@ -601,11 +640,11 @@
       if (!term) return close();
 
       items = getItems()
-        .filter((n) => n.toLowerCase().indexOf(term) !== -1)
+        .filter((n) => hit(n, term) !== Infinity)
         .sort((a, b) => {
-          const sa = a.toLowerCase().indexOf(term) === 0 ? 0 : 1;
-          const sb = b.toLowerCase().indexOf(term) === 0 ? 0 : 1;
-          return sa - sb || a.localeCompare(b);
+          const sa = hit(a, term) === 0 ? 0 : 1;
+          const sb = hit(b, term) === 0 ? 0 : 1;
+          return sa - sb || displayName(a).localeCompare(displayName(b));
         })
         .slice(0, MAX_SEARCH_RESULTS);
 
@@ -614,7 +653,7 @@
       list.innerHTML = '';
       items.forEach((name, i) => {
         const li = document.createElement('li');
-        li.textContent = name;
+        li.textContent = displayName(name);
         li.addEventListener('mousedown', (event) => {
           event.preventDefault();
           pick(i);
@@ -697,7 +736,7 @@
       return;
     }
 
-    const typed = birthCountry.value.trim();
+    const typed = storedName(birthCountry.value);
     const country = state.byName.has(typed) ? typed : null;
 
     const { error } = await client.from('profiles').upsert({
