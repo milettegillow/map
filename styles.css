@@ -24,12 +24,17 @@ body {
   line-height: 1.5;
   color: var(--ink);
   background-color: var(--parchment);
+  /* A single scanned sheet, not a tile, so it is sized to cover rather than
+     repeated, and pinned to the viewport so the grain runs unbroken behind the
+     header and the map frame. The wash is there only to lift the sheet's dark
+     vignetted edges back above readable contrast at portrait aspect ratios. */
   background-image:
-    repeating-linear-gradient(90deg, rgba(58, 42, 26, 0.022) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(0deg, rgba(58, 42, 26, 0.018) 0 1px, transparent 1px 4px),
-    radial-gradient(130% 90% at 50% 0%, rgba(255, 253, 244, 0.55), transparent 62%),
-    radial-gradient(110% 80% at 15% 100%, rgba(138, 106, 74, 0.12), transparent 70%),
-    radial-gradient(110% 80% at 90% 85%, rgba(138, 106, 74, 0.10), transparent 70%);
+    linear-gradient(rgba(242, 232, 208, 0.2), rgba(242, 232, 208, 0.2)),
+    url("assets/paper.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   -webkit-text-size-adjust: 100%;
 }
 
